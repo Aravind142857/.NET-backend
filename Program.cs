@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http.HttpResults;
+using System.Net.Mail;
 // var newGUID = Guid.NewGuid();
 var builder = WebApplication.CreateBuilder(args);
 // var  MyAllowSpecificOrigins = "_myAllowedOrigins";
@@ -15,6 +16,7 @@ var app = builder.Build();
 app.UseCors("AllowedOrigins");
 // app.UseAuthorization();
 var notes = new List<Note>();
+var subscribers = new List<Subscriber>();
 app.MapGet("/notes", (NoteInterface abstraction) => abstraction.GetAllNotes());
 // app.MapGet("/notes/{id}", )
 app.MapPost("/add", Results<Created<Note>, BadRequest<string>>(Note note, NoteInterface abstraction) => {
@@ -40,16 +42,28 @@ app.MapPost("/add", Results<Created<Note>, BadRequest<string>>(Note note, NoteIn
     }
     return await next(context);
 });
-app.MapPost("/addSubscriber", Results<Created<Person>, BadRequest<string>>(Person person, SubscriberInterface abstraction) => {
-    person = person with {pid = Guid.NewGuid()};
-    var result = abstraction.AddSubscriber(person);
-    return (result != null) ? TypedResults.Created("/{id}", person): TypedResults.BadRequest("Error");
-
+app.MapPost("/subscribers", (Subscriber subscriber) => {
+    var found = subscribers.SingleOrDefault(s => s.email == subscriber.email && s.noteId == subscriber.noteId);
+    // if (found == null)
+    // {
+        subscribers.Add(subscriber);
+        return TypedResults.Created("/{email}", subscriber);
+    // }
+    // else
+    // {
+        // return TypedResults.BadRequest("Error");
+    // }
 });
-app.MapDelete("/removeSubscriber/{pid}", (Guid id, SubscriberInterface abstraction)=> {
-    abstraction.DeleteNode(id);
-    return TypedResults.NoContent();
-})
+// app.MapPost("/addSubscriber", Results<Created<Person>, BadRequest<string>>(Person person, SubscriberInterface abstraction) => {
+//     person = person with {pid = Guid.NewGuid()};
+//     var result = abstraction.AddSubscriber(person);
+//     return (result != null) ? TypedResults.Created("/{id}", person): TypedResults.BadRequest("Error");
+
+// });
+// app.MapDelete("/removeSubscriber/{pid}", (Guid id, SubscriberInterface abstraction)=> {
+//     abstraction.DeleteSubscriber(id);
+//     return TypedResults.NoContent();
+// });
 app.MapGet("/notes/{id}", Results<Ok<Note>, NotFound> (Guid id, NoteInterface abstraction) => {
     var fetchedNote = abstraction.GetNoteById(id);
     return (fetchedNote is null) ? TypedResults.NotFound() : TypedResults.Ok(fetchedNote);
@@ -63,12 +77,17 @@ app.Run();
 // tags, priority, dependentOn (Note), reminderLocation, urgent?, createdAt, editedAt, EditNote
 public record Note(Guid id, string name, string description, DateTime dueDate, bool isCompleted);
 public record Person(Guid pid, MailAddress address, List<Note> subscribedNotes);
+public record Subscriber(string email, string noteId);
 interface NoteInterface {
     Note? GetNoteById(Guid id);
     List<Note> GetAllNotes();
     Note? AddNote(Note note);
     void DeleteNote(Guid id);
 
+}
+interface SubscriberInterface {
+    void DeleteSubscriber(Guid id);
+    Person AddSubscriber(Person person);
 }
 class NoteAbstraction : NoteInterface {
     // TODO: Implement database connection and change each method
